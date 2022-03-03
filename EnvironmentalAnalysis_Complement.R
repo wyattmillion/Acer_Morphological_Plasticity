@@ -29,7 +29,7 @@ library(RColorBrewer)
 library(ggplot2)
 
 setwd("/Volumes/GoogleDrive/My Drive/SCHOOL/LAB/CRRPTransplant") #change path (stuff within "") to the appropriate location
-coords<-read.csv("~/Dropbox/NOAAoutplant/Carlys expt outplant site coordinates.csv",header=T) #change path (stuff within "") to the appropriate location of datasheet if not in current wd
+coords<-read.csv("outplant site coordinates.csv",header=T) #change path (stuff within "") to the appropriate location of datasheet if not in current wd
 coords<- coords %>% arrange(outplant.site = factor(outplant.site, levels=c("E. Sambo","Marker 32","W. Sambo","Big Pine Shoals","Dave's Ledge","Looe Key","Eastern Dry Rocks","Maryland Shoals","Bahia Honda")))
 
 ######1. Making maps for manuscript
