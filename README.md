@@ -32,5 +32,5 @@ Description of files:
 8) SERC_WQ_AUG2020_uM.csv
   - biogeochemical microMolar concentrations for water quality montioring stations associated with outplanted reef sites. Data was downloaded from http://serc.fiu.edu/wqmnetwork/FKNMS-CD/index.htm in August 2020
 
-9) outplant-site-coordinates.csv
+9) outplant site coordinates.csv
   - coordinates for outplant reef sites used in this experiment
