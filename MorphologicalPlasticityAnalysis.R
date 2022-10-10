@@ -228,7 +228,7 @@ write.csv(grow,"AcerMorphologyData_Imputed2.csv",row.names = FALSE)
 ######End of imputation  step########
 
 #Start here if you don't have to change the imputation step and are using the Imputed2 data set from github
-grow<-read.csv("/Volumes/Google Drive/My Drive/SCHOOL/LAB/CRRPTransplant/AcerMorphologyData_Imputed2.csv")
+grow<-read.csv("AcerMorphologyData_Imputed2.csv")
 
 grow$Tag<-as.factor(grow$Tag)
 grow$Array<-as.factor(grow$Array)
@@ -252,7 +252,7 @@ grow$CulumativeBreaks<-ifelse(grow$T3_Status=="M",NA,grow$CulumativeBreaks) #if 
 
 #######Survival Analysis#####
 #using coxPH ratios
-#install.packages("nationalparkcolors")
+#install.packages("corr")
 library(survival) # for survival analysis 
 library(vegan) # for plotting ellipses in principal coordinates analysis plots
 library(corr) # for correlations, not available for R v 3.6.3
@@ -325,22 +325,37 @@ m2$loglik
 
 #but cannot trust coefficients bc of lack of convergence. Will need to use additive model
 m2
-anova(m1)
-anova(m2)
+anova(m2)  #get an error, think this is a versioning issue
 
-
 m3<-coxme(died~Site+(1|CulumativeBreaks), data=score)
 m3$loglik
 -2*-245.8340 #491.668
-
+
 491.668-468.228 #23.44 - including genotype in a model containing site improves model
-
+
 m4<-coxme(died~Genotype+(1|CulumativeBreaks), data=score)
 m4$loglik
 -2*-241.8249   #483.65
 
 483.65-468.228 #15.422 - including site in a model containing genotype improves the model
-
+
+m6<-coxme(died~Genotype+Site+(1|CulumativeBreaks)+(1|T0_TLE),data=score)
+m6$loglik
+-2*-227.005 #454.01
+453.01-468.228 # -15.218 -including initial size in the model does not improve the model
+
+#Significance of Genotype effect
+anova(m2,m3) # p=0.005
+
+#Significance of site effect
+anova(m2,m4) #p=0.035
+
+#Significance of initial size
+anova(m2,m6) #p=0.6008
+
+#Significance of fragmentation
+anova(m2,mAdd) #mAdd is made a little lower in the script, it is the additive model excluding random effects (must use coxph instead of coxme)
+#p=.04944
 
 # Visualize
 #++++++++++++++++++++++++++++++++++++
@@ -348,6 +363,8 @@ m4$loglik
 #brewer.pal(10,"Paired")
 #geno<-c("36","50","44","7","3","31","1","13","41","62")
 colorG <- colorRampPalette(rev(brewer.pal(n = 11, name ="RdBu")))(10)
+
+
 colorS <- colorRampPalette(rev(brewer.pal(n = 11, name ="RdBu")))(9)
 #The middle colors are hard to see so adjusting the 5th color ro a darker grey
 colorS <- c("#053061", "#2971B1" ,"#6AABD0" ,"#C1DDEB", "#B5B5B5", "#FACDB5" ,"#E58267", "#BB2A33", "#67001F")
@@ -383,16 +400,17 @@ df.short$site = factor(df.short$site, levels=c("E. Sambo","Marker 32","W. Sambo"
 # Rank order "E. Sambo","Marker 32","W. Sambo","Big Pine","Dave's Ledge","Looe Key","EDR","Maryland Shoals","Bahia Honda"
 # Geographic order "Bahia Honda","Big Pine", "Looe Key","Dave's Ledge","Maryland Shoals","E. Sambo","W. Sambo","Marker 32", "EDR"
 GxSMatrix<-spread(df.short,site,PercSurv)
-GcorrBySite<-cor(GxSMatrix[,c(2:10)])
-quartz()
-corrplot(GcorrBySite,type="upper",tl.col="black",tl.srt=45,method='ellipse')
-corrplot.mixed(GcorrBySite,lower = "number",upper="ellipse",tl.col="black")
+library(psych)
+GcorrBySiteSp<-corr.test(GxSMatrix[,c(2:10)],method = "spearman")
+GcorrBySiteSp[["p"]]
+library(gdata)
+upperTriangle(GcorrBySiteSp[["p"]],diag=F,byrow = T)<-lowerTriangle(GcorrBySiteSp[["p"]],diag=F,byrow = F)
 
-plotlist<-c(p1,p2)
-plot_grid(plotlist = plotlist,ncol=2,labels = c("A","B"))
-
+quartz()
+corrplot(GcorrBySiteSp[["r"]],type="upper",tl.col="black",tl.srt=45,method='ellipse',p.mat = GcorrBySiteSp[["p"]],sig.level = c(0.1), insig = "label_sig",pch.col = 'grey',diag = T)
+
 ####
-#non mixed-effects version, same story, interaction is significant
+#non mixed-effects version of survival analysis, same story, interaction is significant
 mInt<-coxph(died~Site*Genotype, data=score)
 #note, model does not converge, coefficients should be ignored but log likelihood score remains valid see ?coxph
 mInt$loglik
@@ -402,7 +420,7 @@ mInt$loglik
 mAdd<-coxph(died~Site+Genotype, data=score)
 mAdd$loglik
 -2*-237.4866 #calculate the -2LogL = 474.9732
-
+anova(mAdd)
 #calculate log likelihood ratio statistic = (-2LogL mAdd) - (-2LogL mInt)
 474.9732-410.8974 #64.0758-> large improvement in log likelihood, should retain interaction term in model but cannot trust coefficients...
 ###
@@ -439,9 +457,9 @@ test<-test[complete.cases(test$Status),]
 test<-filter(test,Status!="M")
 
 #GLM for effect of size on potential to break
-output <- glm(broken~size, family="binomial", data=test)
-summary(output) #size does not impact likelihood of breakage but this may not be the best way of looking at it
-anova(output)
+#output <- glm(broken~size, family="binomial", data=test)
+#summary(output) #size does not impact likelihood of breakage but this may not be the best way of looking at it
+#anova(output)
 
 #Fisher's exact test for breakage, first set the size classes
 test %>% filter(size<5 & broken==0) %>% summarize(Broken=n())  #173
@@ -479,15 +497,20 @@ library(ggbeeswarm)
 ggplot(test)+geom_quasirandom(aes(x=as.factor(test$broken),y=size), size = 0.5,na.rm=T,col=as.numeric(test$Status))
 
 #running the Cumulative Link mixed model
+library(ordinal)
 broke<-grow
 broke$CulumativeBreaks<-factor(broke$CulumativeBreaks,ordered = T,levels = c("0","1","2"))
 broke$Genotype<-relevel(broke$Genotype,ref="1")
 broke$Site<-relevel(broke$Site,ref="Marker 32")
-frag=clm(CulumativeBreaks~Site+Genotype,data=broke,Hess=TRUE,link="probit") 
+frag1=clm(CulumativeBreaks~Site+Genotype,data=broke,Hess=TRUE,link="probit")
+
+broke$T3_Break<-as.factor(broke$T3_Break)
+frag2=clm(T3_Break~Site+Genotype+T0_TLE,data=broke,Hess=TRUE,link="probit")
+frag3=clm(CulumativeBreaks~Site+Genotype+T0_TLE,data=broke,Hess=TRUE,link="probit")
 #warning message about singularity and non convergence goes away when interaction is removed
-frag
-summary(frag)
-logLik(frag)
+frag1
+summary(frag2)
+logLik(frag1)
 
 
 #1. How often does fragmentation immediately precede death?
@@ -520,6 +543,19 @@ sum(grow$T6_Break,na.rm = T) #53
 sum(grow$T9_Break,na.rm = T) #24
 sum(grow$T12_Break,na.rm = T) #14
 
+
+#relationship between fragmentation and survival 
+gbreak<-grow %>% group_by(Genotype) %>%
+  summarise(TotalFrag=sum(CulumativeBreaks,na.rm=T))
+gbreak$risk<-c(1,0.9524501,1.2405797,1.1978105,1.0984207,1.5670542,1.6818513,2.3255781,2.5519734,2.6081417)
+
+cor.test(gbreak$TotalFrag,gbreak$risk,method="kendall")
+
+sbreak<-grow %>% group_by(Site) %>%
+  summarise(TotalFrag=sum(CulumativeBreaks,na.rm=T))
+sbreak$risk<-c(1,1.0708734 , 1.3784374,1.3089321,1.4134808,2.1242445,2.0674828,2.1523159,2.5649031)
+cor.test(sbreak$TotalFrag,sbreak$risk,method="kendall")
+
 ##############
 #End of breakage analysis
 
@@ -536,6 +572,33 @@ grow %>% group_by(Site) %>%
             mean(T12_V,na.rm=T),
             mean(T12_Vinter,na.rm=T))
 
+#calculating the size-independent morphological shapes
+grow<-grow %>% mutate(T0_SAtoV=T0_SA/T0_V,
+                      T0_SAtoTLE=T0_SA/T0_TLE,
+                      T0_Sphericity=(4*pi*(((3*T0_V)/(4*pi))^(1/3))^2)/T0_SA,
+                      T0_Convexity=T0_V/T0_Vcx,
+                      T0_Packing=T0_SA/T0_SAcx,
+                      T3_SAtoV=T3_SA/T3_V,
+                      T3_SAtoTLE=T3_SA/T3_TLE,
+                      T3_Sphericity=(4*pi*(((3*T3_V)/(4*pi))^(1/3))^2)/T3_SA,
+                      T3_Convexity=T3_V/T3_Vcx,
+                      T3_Packing=T3_SA/T3_SAcx,
+                      T6_SAtoV=T6_SA/T6_V,
+                      T6_SAtoTLE=T6_SA/T6_TLE,
+                      T6_Sphericity=(4*pi*(((3*T6_V)/(4*pi))^(1/3))^2)/T6_SA,
+                      T6_Convexity=T6_V/T6_Vcx,
+                      T6_Packing=T6_SA/T6_SAcx,
+                      T9_SAtoV=T9_SA/T9_V,
+                      T9_SAtoTLE=T9_SA/T9_TLE,
+                      T9_Sphericity=(4*pi*(((3*T9_V)/(4*pi))^(1/3))^2)/T9_SA,
+                      T9_Convexity=T9_V/T9_Vcx,
+                      T9_Packing=T9_SA/T9_SAcx,
+                      T12_SAtoV=T12_SA/T12_V,
+                      T12_SAtoTLE=T12_SA/T12_TLE,
+                      T12_Sphericity=(4*pi*(((3*T12_V)/(4*pi))^(1/3))^2)/T12_SA,
+                      T12_Convexity=T12_V/T12_Vcx,
+                      T12_Packing=T12_SA/T12_SAcx)
+
 ####### Mixed models for absolute size 
 ####################
 
@@ -545,10 +608,10 @@ grow %>% group_by(Site) %>%
 
 #removing dead colonies (once you die, all future measures are not included)
 grow2<-grow
-grow2[which(grow2$T3_Status!="A"),c(15:20,22:27,29:34,36:41,54:57)]<-NA #if a coral is dead, replace all following measures with NA
-grow2[which(grow2$T6_Status!="A"),c(22:27,29:34,36:41,55:57)]<-NA
-grow2[which(grow2$T9_Status!="A"),c(29:34,36:41,56:57)]<-NA
-grow2[which(grow2$T12_Status!="A"),c(36:41,57)]<-NA
+grow2[which(grow2$T3_Status!="A"),c(15:20,22:27,29:34,36:41,54:57,63:82)]<-NA #if a coral is dead, replace all following measures with NA
+grow2[which(grow2$T6_Status!="A"),c(22:27,29:34,36:41,55:57,68:82)]<-NA
+grow2[which(grow2$T9_Status!="A"),c(29:34,36:41,56:57,73:82)]<-NA
+grow2[which(grow2$T12_Status!="A"),c(36:41,57,78:82)]<-NA
 
 #pivoting data set to have a column for trait value and time and trait
 size<-grow2 %>% pivot_longer(cols=c(15,17,18,22,24,25,29,31,32,36,38,39,54:57),names_to = c('time','trait'),names_sep='_',values_to="size",values_drop_na=T)
@@ -610,16 +673,82 @@ ggplot(size[which(size$trait=="TLE"),],aes(x=T0_TLE,y=size))+
 #####
 #End of mixed modeling for absolute size
 
+##Mixed models for shape
+
+shape<-grow2 %>% pivot_longer(cols=c(63:82),names_to = c('time','trait'),names_sep='_',values_to="shape",values_drop_na=T)
+shape$time<-factor(shape$time,ordered = T,levels=c("T3","T6","T9","T12")) #making time ordinal
+shape <- shape[!is.infinite(rowSums(shape[65])),] #infinite value occur when SA or V = 0 in a ratio, ignore these.
+shape<-filter(shape,shape>0) #all values should be greater than 0
+shape$shape<- ifelse(shape$trait=="Sphericity"& shape$shape>1,NA,shape$shape) #sphericity and convexity are bounded by 0 and 1,
+shape$shape<- ifelse(shape$trait=="Convexity"& shape$shape>1,NA,shape$shape)
+shape<-shape[complete.cases(shape$shape),]
+
+#mixed model for Surface area to volume
+  SAVmod<-lmer(log(shape)~Genotype*Site*time+T0_SAtoV+(1|Site:Array)+(1|CulumativeBreaks),data=shape[which(shape$trait=="SAtoV"),],REML = T)
+  qqPlot(residuals(SAVmod),xlab="Theoretical Quantiles",ylab="Observed Quantiles",main = "SAtoV mod") #try a transform if data are non-normal, log(x+1) looks really good
+
+  plot(SAVmod,which=1,main="TLEmod") #want random scatter; no apparent trend line, looks better after log(x)
+
+  #Looking at results of MEM
+  anova(SAVmod,ddf="Kenward-Roger") # genotype, time, initial size, and GxS are sig
+  summary(SAVmod) #
+  rand(SAVmod) #both random effects are very sig
+  
+#Surface area to tle
+  SATLEmod<-lmer(log(shape)~Genotype*Site*time+T0_SAtoTLE+(1|Site:Array)+(1|CulumativeBreaks),data=shape[which(shape$trait=="SAtoTLE"),],REML = T)
+  qqPlot(residuals(SATLEmod),xlab="Theoretical Quantiles",ylab="Observed Quantiles",main = "SAtoTLE mod") #try a transform if data are non-normal, log(x+1) looks really good
+  
+  plot(SATLEmod,which=1,main="SATLEmod") #want random scatter; no apparent trend line, looks better after log(x)
+  
+  #Looking at results of MEM
+  anova(SATLEmod,ddf="Kenward-Roger") # genotype, time, initial size, and GxS are sig
+  summary(SATLEmod) #
+  rand(SATLEmod) #both random effects are very sig
+  
+#Sphericity
+  Sphmod<-lmer(log(shape)~Genotype*Site*time+T0_Sphericity+(1|Site:Array)+(1|CulumativeBreaks),data=shape[which(shape$trait=="Sphericity"),],REML = T)
+  qqPlot(residuals(Sphmod),xlab="Theoretical Quantiles",ylab="Observed Quantiles",main = "Sphericity mod") #try a transform if data are non-normal, log(x+1) looks really good
+  
+  plot(Sphmod,which=1,main="Sphmod") #want random scatter; no apparent trend line, looks better after log(x)
+  
+  #Looking at results of MEM
+  anova(Sphmod,ddf="Kenward-Roger") # genotype, time, initial size, and GxS are sig
+  summary(Sphmod) #
+  rand(Sphmod) #both random effects are very sig  
+  
+#Convexity
+  Conmod<-lmer(log(shape)~Genotype*Site*time+T0_Convexity+(1|Site:Array)+(1|CulumativeBreaks),data=shape[which(shape$trait=="Convexity"),],REML = T) #creates some NAs but these are negative values created during imputation and can be ignored 
+  qqPlot(residuals(Conmod),xlab="Theoretical Quantiles",ylab="Observed Quantiles",main = "Convexity mod") #try a transform if data are non-normal, log(x+1) looks really good
+  
+  plot(Conmod,which=1,main="Conmod") #want random scatter; no apparent trend line, looks better after log(x)
+  
+  #Looking at results of MEM
+  anova(Conmod,ddf="Kenward-Roger") # genotype, time, initial size, and GxS are sig
+  summary(Conmod) #
+  rand(Conmod) #both random effects are very sig
+  
+#Packing
+  Packmod<-lmer(log(shape)~Genotype*Site*time+T0_Packing+(1|Site:Array)+(1|CulumativeBreaks),data=shape[which(shape$trait=="Packing"),],REML = T) #creates some NAs but these are negative values created during imputation and can be ignored 
+  qqPlot(residuals(Packmod),xlab="Theoretical Quantiles",ylab="Observed Quantiles",main = "Packing mod") #try a transform if data are non-normal, log(x+1) looks really good
+  
+  plot(Packmod,which=1,main="Packmod") #want random scatter; no apparent trend line, looks better after log(x)
+  
+  #Looking at results of MEM
+  anova(Packmod,ddf="Kenward-Roger") # genotype, time, initial size, and GxS are sig
+  summary(Packmod) #
+  rand(Packmod) #both random effects are very sig
+
+  
 ####Mixed models for growth rate
 #####
-#   - perhaps makes more sennse to be used for plasticity
+#   - perhaps makes more sense to be used for plasticity
 #   - removing any coral with a break, only want positive growth
 #   - using growth rate per 3 month period as a trait
 
 ##Calculating the growth metrics, this will be growth over each 3 month time point recorded as growth rate per month
 #could consider using something like 'standardized productivity' where new growth is standardized by old growth 
 #   final-initial/time/initial size  <- does this have issues with the repeat of initial size?
-#   drury et al. used inital number of branches to standardize by inital size
+#   Drury et al. used inital number of branches to standardize by initial size
 #TLE
 grow<-
   grow %>% 
@@ -654,23 +783,17 @@ grow<-
 #Removing colonies that lost any of its TLE over any 3 month period.
 
 #what if I completely removed a colony with any severe breakage -> leaves us with 76 corals and extremely poor replication across genotypes and sites.
-#test<-grow
-#grow2<-grow%>%
-#  filter((TLE_0.3)>0) %>% 
-#  filter((TLE_3.6)>0) %>% 
-#  filter((TLE_6.9)>0) %>% 
-#  filter((TLE_9.12)>0)  
-
+  
 grow3<-grow
 #want to put NA in all following time points if dead (some instances where we measured a dead coral)
-grow3[which(grow3$T3_Status!="A"),c(58:73)]<-NA #if growth is negative or a coral is dead, replace all following GRs with NA
-grow3[which(grow3$T6_Status!="A"),c(59:61,63:65,67:69,71:73)]<-NA
-grow3[which(grow3$T9_Status!="A"),c(60,61,64,65,68,69,72,73)]<-NA
-grow3[which(grow3$T12_Status!="A"),c(61,65,69,73)]<-NA
+grow3[which(grow3$T3_Status!="A"),c(83:98)]<-NA #if growth is negative or a coral is dead, replace all following GRs with NA
+grow3[which(grow3$T6_Status!="A"),c(84:86,88:90,92:94,96:98)]<-NA
+grow3[which(grow3$T9_Status!="A"),c(85,86,89,90,93,94,97,98)]<-NA
+grow3[which(grow3$T12_Status!="A"),c(86,89,94,98)]<-NA
 
-#Removing the instance of breakage but still allowing for tubthumping (i.e. I get knocked down, but I get up again)
-#but what is considered breakage, any negative growth, 
-#some negative to allow for errors in models (if so, use numbers in comments that are based on CV for each trait)
+#Removing the instance of breakage but still allowing for "tubthumping" (i.e. I get knocked down, but I get up again)
+#but what is considered breakage? : any negative growth, 
+#some negative to allow for errors in models (if so, use numbers in comments that are based on CV for each trait), *did do this, went with anything less than 0 because thats what previous studies did.
 grow3[which(grow3$TLE_0.3<(0)),c("TLE_0.3","Vinter_0.3")]<-NA #-.19
 grow3[which(grow3$SA_0.3<(0)),c("SA_0.3")]<-NA #-1.5
 grow3[which(grow3$V_0.3<(0)),c("V_0.3")]<-NA #-.6
@@ -690,7 +813,7 @@ grow3[which(grow3$V_9.12<(0)),c("V_9.12")]<-NA #-1.98
 #Lirman et al 2014, and many others show impact of size on growth rate,
 #therefore including size at begining of a time period when modeling growth rate is necessary 
 #pivoting data frame to make it easier to work with
-grow4<-grow3 %>% pivot_longer(cols=58:73,names_to = c('trait','time'),names_sep='_',values_to="growth_rate") #removing only negative GR events instead of entire colonies that broken give 4x more phenotype measures
+grow4<-grow3 %>% pivot_longer(cols=83:98,names_to = c('trait','time'),names_sep='_',values_to="growth_rate") #removing only negative GR events instead of entire colonies that broken give 4x more phenotype measures
 grow4<- grow4 %>% separate(time,c("start","end"),"([.])",convert=T,remove=F) #separate time in to start and end point
 
 #now get the size of each fragment at the start of each time interval with this
@@ -781,29 +904,27 @@ size2<-size2 %>% mutate(time=factor(time,levels = c("T0","T3","T6","T9","T12")))
 #Wanted to do a PCA for morphology but using absolute size isn't meaningful because the dominant signal is size change over time so instead looking at shape in traits not dependent on size
 #Evaluating invariant shape of colonies at end of the experiment at each site
 #using only nonbroken colonies to look at shapes of coral able to grow without any physical damage
-shape<-grow2 %>% filter(T12_Status=="A")%>% filter(CulumativeBreaks==0) 
-shape<-shape %>% mutate(SAtoV=T12_SA/T12_V,
-                        SAtoTLE=T12_SA/T12_TLE,
-                        Shericity=(4*pi*(((3*T12_V)/(4*pi))^(1/3))^2)/T12_SA,
-                        Convexity=T12_V/T12_Vcx,
-                        Packing=T12_SA/T12_SAcx)
 
+shape2<-shape %>% filter(time=="T12") %>% filter(CulumativeBreaks==0) #include this if you want to see what it looks like without broken corals
+shape2<-shape2[,c(1:6,64,65)]
+shape2<-pivot_wider(shape2,names_from = trait,values_from = shape)
+shape2<-shape2[complete.cases(shape2$Sphericity),]
 #Morphology principal components 
-pcaMor<-prcomp(shape[,c(58:62)],scale=T)
+pcaMor<-prcomp(shape2[,7:11],scale=T)
 #if you want to color points by categories of good vs bad sites
-shape$Quality<-ifelse(shape$Site %in% c("E. Sambo","Marker 32","W. Sambo"),"Top 3",ifelse(shape$Site %in% c("EDR","Maryland Shoals","Bahia Honda"),"Bottom 3","Mid 3"))
-shape$Quality<-as.factor(shape$Quality)
+shape2$Quality<-ifelse(shape2$Site %in% c("E. Sambo","Marker 32","W. Sambo"),"Top 3",ifelse(shape2$Site %in% c("EDR","Maryland Shoals","Bahia Honda"),"Bottom 3","Mid 3"))
+shape2$Quality<-as.factor(shape2$Quality)
 
 #change components of autoplot to color by site, quality, genet, etc
 quartz()
-autoplot(pcaMor,data=shape,loadings=T,loadings.label=T,colour='Site',size=2,frame=T,frame.type=,
+autoplot(pcaMor,data=shape2,loadings=T,loadings.label=T,colour='Genotype',size=2,frame=T,frame.type=,
          loadings.label.size=3,loadings.label.repel=T, loading.label.color="darkgrey", loadings.colour='lightgrey',
          label.size=3)+
   #geom_text(vjust=1.5,label=envC[-6,1],size=3)+
   #geom_text_repel(label=envC[-6,1])+
   theme_classic()+
   theme(legend.position = "right")+
-  scale_color_manual(values = colorG)+scale_fill_manual(values=colorS)
+  scale_color_manual(values = colorG)+scale_fill_manual(values=colorG)
 
 #plot of averaged genotype growth at a site
 quartz()
@@ -831,7 +952,7 @@ size2[which(size2$trait=="TLE"& size2$Site=="Maryland Shoals"),] %>%  #change tr
   ggtitle("Maryland Shoals")+
   facet_wrap(~Genotype,scales = "free")
 
-#Relationship between size and growth rate, which could be a standardized GR by size
+#Relationship between size and growth rate, which could be a standardized GR by size, as in Lirman et al 2014
 ggplot(grow4[which(grow4$trait=="TLE"),],aes(x=size,y=growth_rate/size))+
   geom_point()+
   geom_smooth()+
@@ -851,11 +972,8 @@ grow4[which(grow4$trait=="TLE"),] %>% #change trait as needed
   ylab("TLE GR (cm/month)")+ #change title as needed
   facet_wrap(~Site,scales = "free")
 
-#plotting each individual coral at a site by array
+#plotting each individual coral growth rate at a site by array
 grow4[which(grow4$trait=="TLE"& grow4$Site=="Maryland Shoals"),] %>% #change trait and site as needed
-  #group_by(Genotype,Site,time) %>%
-  #summarise(size=mean(size)) %>%
-  #mutate(time=factor(time,levels = c())) %>%
   ggplot(aes(x=time,y=growth_rate,color=Array))+
   geom_point(aes(color=Array))+
   geom_line(aes(color=Array,group=Array))+
@@ -863,6 +981,7 @@ grow4[which(grow4$trait=="TLE"& grow4$Site=="Maryland Shoals"),] %>% #change tra
   ggtitle("Maryland Shoals")+ #change title as needed
   facet_wrap(~Genotype,scales = NULL)
 
+#making a traditional looking reaction norm for a trait, including site averages too
 pd=position_dodge(.2)
 grow4[which(grow4$trait=="TLE" & grow4$time=="9.12"),] %>% #change trait as needed
   group_by(Genotype,Site) %>%
@@ -872,7 +991,7 @@ grow4[which(grow4$trait=="TLE" & grow4$time=="9.12"),] %>% #change trait as need
   geom_line(aes(color=Genotype,linetype=Genotype, group=Genotype),size=1,position = pd)+
   #geom_errorbar(aes(ymin=gr-se, ymax=gr+se, color=Genotype), width=.2,position = pd)+
   scale_color_manual(values = colorG)+
-  stat_summary(fun=mean,geom = 'crossbar',color="black", width=0.3)+
+  stat_summary(fun=mean,geom = 'crossbar',color="black", width=0.3)+ #helps visualize site averages
   theme(axis.title = element_blank())
 
 ######
@@ -880,7 +999,7 @@ grow4[which(grow4$trait=="TLE" & grow4$time=="9.12"),] %>% #change trait as need
 ##Joint Regression Analysis
 ###########
 
-#function to preform the joint regression analysis and provide the coeffienent, r.squared, and pvalue
+#function to preform the joint regression analysis and provide the coefficient, intercept, r.squared, and pvalue
 #it first calculates environmental averages
 #then calculates the genotype averages at each site
 #then fits linear regression for a given genotype, trait, time; data is the full dataset with all trait values
@@ -893,13 +1012,14 @@ jra<-function(grouping1,grouping2,genotype,trait,time,data){
     complete(Genotype,Site,trait,time)
   mod<-lm(filter(G,Genotype==UQ(genotype)& trait==UQ(trait) &time==UQ(time))$Gavg~
        filter(S,trait==UQ(trait) &time==UQ(time))$Savg)
-  return(c(mod$coefficients[[2]],summary(mod)$adj.r.squared,summary(mod)$coefficients[,4][[2]]))
+  return(c(mod$coefficients[1],mod$coefficients[[2]],summary(mod)$adj.r.squared,summary(mod)$coefficients[,4][[2]]))
 }
 
+#For absolute size
 group1<-c("Site","trait","time")
 group2<-c("Genotype","Site","trait","time")
 
-b<-matrix(nrow=1,c("Genotype","Trait","Time","Plasticity","adj.r.sq","p.val"))
+b<-matrix(nrow=1,c("Genotype","Trait","Time","Intercept", "Plasticity","adj.r.sq","p.val"))
 for (ti in unique(size$time)){
   for (tr in unique(size$trait)){
     for(g in unique(size$Genotype)) {
@@ -910,49 +1030,155 @@ for (ti in unique(size$time)){
 }
 
 jr.pls<-as.data.frame(b[-1,]) #safe matrix as dataframe
-names(jr.pls)<-c("Genotype", "Trait", "Time", "Plasticity", "adj.r.sq", "p.val") #rename columns
-jr.pls$Plasticity<- as.numeric(as.character(jr.pls$Plasticity))  
+names(jr.pls)<-c("Genotype", "Trait", "Time", "Intercept","Plasticity", "adj.r.sq", "p.val") #rename columns
+jr.pls$Plasticity<- as.numeric(as.character(jr.pls$Plasticity))
+jr.pls$Intercept<- as.numeric(as.character(jr.pls$Intercept))
 jr.pls$adj.r.sq<- as.numeric(as.character(jr.pls$adj.r.sq))
 jr.pls$p.val<- as.numeric(as.character(jr.pls$p.val))
 
-##If you want to spot check the loop
-jra(grouping1=group1,grouping2=group2,genotype = "1",trait = "SA",time="T3",data=size)
+##This will plot the joint regression lines, essentially the slope and intercept that is spit out from the JRA
+#Lines with greater slopes and lower 
+jr.pls= jr.pls %>%
+  mutate(Genotype=factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")))
+filter(jr.pls,Trait=="SA",Time=="T12") %>% ggplot()+ #change trait as desired
+  geom_abline(aes(intercept = Intercept, slope = Plasticity, color=factor(Genotype)))+
+  geom_abline(aes(intercept = 0, slope =1), color="black",lty="dashed")+
+  xlim(-5,100) +
+  ylim(-5,100)+
+  scale_color_manual(values = colorG)+
+  theme_bw()+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  labs(x="population trait value (TLE)",y="genet trait value (TLE)")
 
-#or to check the entire function
-  S<-size %>% group_by_at(group1) %>% 
-    summarize(Savg=mean(size)) %>% ungroup() %>%
+aggregate(grow2$T12_TLE, list(grow2$Site), FUN=mean,na.rm=T) 
+
+#For shape traits
+jraShape<-function(grouping1,grouping2,genotype,trait,time,data){
+  S<-data %>% group_by_at(grouping1) %>% 
+    summarize(Savg=mean(shape)) %>% ungroup() %>%
     complete(Site,trait,time)
-  G<-size %>% group_by(Genotype, Site, trait, time) %>% 
-    summarize(Gavg=mean(size,na.rm=T)) %>% ungroup() %>%
+  G<-data %>% group_by_at(grouping2) %>% 
+    summarize(Gavg=mean(shape))%>% ungroup() %>%
     complete(Genotype,Site,trait,time)
-  
-  summary(lm(filter(G,Genotype=="1", trait=="SA" &time=="T3")$Gavg~
-           filter(S,trait=="SA" &time=="T3")$Savg))
-
-##IF THE REVIEWERS ASK
-#####EDR seems to be an outlier for some genotypes, so doing JR with all sites except EDR may be useful
-  group1<-c("Site","trait","time")
-  group2<-c("Genotype","Site","trait","time")
-  
-  b2<-matrix(nrow=1,c("Genotype","Trait","Time","Plasticity","adj.r.sq","p.val"))
-  for (ti in unique(grow4[which(grow4$Site!="EDR"),]$time)){
-    for (tr in unique(grow4[which(grow4$Site!="EDR"),]$trait)){
-      for(g in unique(grow4[which(grow4$Site!="EDR"),]$Genotype)) {
-        eop<-jra(grouping1=group1,grouping2=group2,genotype = g,trait = tr,time=ti,data=grow4[which(grow4$Site!="EDR"),])
-        b2<-rbind(b2,c(g,tr,ti,as.numeric(eop)))
-      }
+  mod<-lm(filter(G,Genotype==UQ(genotype)& trait==UQ(trait) &time==UQ(time))$Gavg~
+            filter(S,trait==UQ(trait) &time==UQ(time))$Savg)
+  return(c(mod$coefficients[1],mod$coefficients[[2]],summary(mod)$adj.r.squared,summary(mod)$coefficients[,4][[2]]))
+}
+group1<-c("Site","trait","time")
+group2<-c("Genotype","Site","trait","time")
+shapeSave<-shape
+shape<-shapeSave
+#removing a packing outlier, this particular coral was just a nub with dead tissue on top, TLE, SA, V, Vinter are accurate but shape metrics will be off because SA of convex hull will be off
+#seems to only impact the Packing stats
+shape<-shape[-c(151),]  
+b2<-matrix(nrow=1,c("Genotype","Trait","Time","Intercept", "Plasticity","adj.r.sq","p.val"))
+for (ti in unique(shape$time)){
+  for (tr in unique(shape$trait)){
+    for(g in unique(shape$Genotype)) {
+      eop<-jraShape(grouping1=group1,grouping2=group2,genotype = g,trait = tr,time=ti,data=shape)
+      b2<-rbind(b2,c(g,tr,ti,as.numeric(eop)))
     }
   }
+}
+
+jr.shape<-as.data.frame(b2[-1,]) #safe matrix as dataframe
+names(jr.shape)<-c("Genotype","Trait","Time","Intercept", "Plasticity","adj.r.sq","p.val") #rename columns
+jr.shape$Plasticity<- as.numeric(as.character(jr.shape$Plasticity))  
+jr.shape$adj.r.sq<- as.numeric(as.character(jr.shape$adj.r.sq))
+jr.shape$p.val<- as.numeric(as.character(jr.shape$p.val))
+
+
+##If you want to spot check the loop
+jraShape(grouping1=group1,grouping2=group2,genotype = "41",trait = "Packing",time="T6",data=shape)
+
+#Weird values for packing which is due to 1 coral (BH9 at T6) so this removes it
+test<-shape
+
+S<-test %>% group_by_at(group1) %>% 
+    summarize(Savg=mean(shape)) %>% ungroup() %>%
+    complete(Site,trait,time)
+  G<-test %>% group_by(Genotype, Site, trait, time) %>% 
+    summarize(Gavg=mean(shape,na.rm=T)) %>% ungroup() %>%
+    complete(Genotype,Site,trait,time)
   
-  jr.pls2<-as.data.frame(b2[-1,]) #safe matrix as dataframe
-  names(jr.pls2)<-c("Genotype", "Trait", "Time", "Plasticity", "adj.r.sq", "p.val") #rename columns
-  jr.pls2$Plasticity<- as.numeric(as.character(jr.pls2$Plasticity))  
-  jr.pls2$adj.r.sq<- as.numeric(as.character(jr.pls2$adj.r.sq))
-  jr.pls2$p.val<- as.numeric(as.character(jr.pls2$p.val))
+  mod<-summary(lm(filter(G,Genotype=="41", trait=="Packing" &time=="T6")$Gavg~
+           filter(S,trait=="Packing" &time=="T6")$Savg)) #new jr plasticity value is .1138
+  plot(filter(G,Genotype=="41", trait=="Packing" &time=="T6")$Gavg~
+       filter(S,trait=="Packing" &time=="T6")$Savg)
+
+  ##IF THE REVIEWERS ASK
+#####EDR seems to be an outlier for some genotypes, so doing JR with all sites except EDR may be useful
+#  group1<-c("Site","trait","time")
+#  group2<-c("Genotype","Site","trait","time")
+  
+#  b3<-matrix(nrow=1,c("Genotype","Trait","Time","Plasticity","adj.r.sq","p.val"))
+#  for (ti in unique(grow4[which(grow4$Site!="EDR"),]$time)){
+  #   for (tr in unique(grow4[which(grow4$Site!="EDR"),]$trait)){
+  #     for(g in unique(grow4[which(grow4$Site!="EDR"),]$Genotype)) {
+  #       eop<-jra(grouping1=group1,grouping2=group2,genotype = g,trait = tr,time=ti,data=grow4[which(grow4$Site!="EDR"),])
+  #       b3<-rbind(b3,c(g,tr,ti,as.numeric(eop)))
+  #     }
+  #   }
+  # }
+  # 
+  # jr.pls2<-as.data.frame(b2[-1,]) #safe matrix as dataframe
+  # names(jr.pls2)<-c("Genotype", "Trait", "Time", "Plasticity", "adj.r.sq", "p.val") #rename columns
+  # jr.pls2$Plasticity<- as.numeric(as.character(jr.pls2$Plasticity))  
+  # jr.pls2$adj.r.sq<- as.numeric(as.character(jr.pls2$adj.r.sq))
+  # jr.pls2$p.val<- as.numeric(as.character(jr.pls2$p.val))
 
   #####Removing EDR, a location of very high growth for 2 genotypes, reduced the strength of the 2-way relationships between plasticity and survival.
   #Conclusions may not be very different, plasticity still tends to increase survival but is not significant
   #However,the plasticity vs growth relationships strengthen.
+
+#Visualizing the joint regression for reviewers
+#essentially a reaction norm for a trait using genet averages at each site with the site average included as a reference
+grow.avg<-
+    grow2 %>%
+    group_by(Site, Genotype) %>%
+    summarize(mean_grow=mean(T12_TLE, na.rm=T))
+grow.avg <-
+  grow.avg %>% mutate(
+    Plasticity=case_when(
+    Genotype=="36"~0.799126824,
+    Genotype=="1"~2.3216315,
+    Genotype=="50"~2.0048377,
+    Genotype=="3"~0.8555351,
+    Genotype=="44"~1.1209397,
+    Genotype=="7"~0.4772298,
+    Genotype=="31"~0.3348448,
+    Genotype=="13"~0.2497892,
+    Genotype=="62"~0.3412831,
+    Genotype=="41"~0.3635551,
+  ))
+
+grow.avg= grow.avg %>% 
+  mutate(Site = factor(Site, levels=c("Looe Key",
+                                      "Bahia Honda",
+                                      "Maryland Shoals",
+                                      "Dave's Ledge",
+                                      "Big Pine",
+                                      "W. Sambo",
+                                      "E. Sambo",
+                                      "Marker 32",
+                                      "EDR"
+                                      )))
+
+grow.avg$Genotype<-fct_reorder(grow.avg$Genotype,grow.avg$Plasticity,.desc=T)
+colorP <- colorRampPalette(rev(brewer.pal(n = 11, name ="Set3")))(10)  
+pd=position_jitter(.3)
+  ggplot(grow.avg, aes(x=Site,y=mean_grow))+
+    stat_summary(fun=mean, colour='black', geom='point', shape='-', size=25, alpha=.5)+
+    geom_point(aes(color=Genotype), size = 3,position = pd)+
+    #geom_line(aes(color=Plasticity,linetype=Plasticity, group=Genotype),size=1,position = pd)+
+    #geom_errorbar(aes(ymin=mean_grow-se, ymax=mean_grow+se, color=Genotype), width=.2,position = pd)+
+    #scale_colour_gradient2(low="black",high="blue",midpoint = .64)+
+    scale_color_manual(values = colorP)+
+    ylab("Final Size in TLE")+
+    theme_bw()
+    
+  
 ####END OF JOINT REGRESSION
 ######
 
@@ -961,55 +1187,202 @@ jra(grouping1=group1,grouping2=group2,genotype = "1",trait = "SA",time="T3",data
 
 #adding on the survival data taken from Cox models above
 jr.pls<-jr.pls %>% arrange(factor(Genotype,levels = c("36","1","50","3","44","7","31","13","62","41"))) #reorder dfs to more easily add new columns
+jr.shape<-jr.shape %>% arrange(factor(Genotype,levels = c("36","1","50","3","44","7","31","13","62","41"))) #reorder dfs to more easily add new columns
+
 m2$coefficients[9:17] 
 #cox risk scores, higher scores means greater chance of death
 #Genotype1 Genotype50  Genotype3 Genotype44  Genotype7 Genotype31 Genotype13  Genotype62 Genotype41
 #0.9524501  1.2405797  1.1978105  1.0984207  1.5670542  1.6818513  2.3255781  2.5519734  2.6081417
  
 #probably a cleaner way of doing this
-jr.pls$RiskScore<-c(rep(1,16), rep(0.952,16), rep(1.241,16), rep(1.198,16), rep(1.0984207,16), rep(1.5670542,16), rep(1.6818513,16) ,rep(2.3255781,16) ,rep(2.5519734,16), rep(2.6081417,16))
+jr.pls<-jr.pls %>% mutate(
+  RiskScore=case_when(
+    Genotype=="36"~1,
+    Genotype=="1"~0.9524501,
+    Genotype=="50"~1.2405797,
+    Genotype=="3"~1.1978105,
+    Genotype=="44"~1.0984207,
+    Genotype=="7"~1.5670542,
+    Genotype=="31"~1.6818513,
+    Genotype=="13"~2.3255781,
+    Genotype=="62"~2.5519734,
+    Genotype=="41"~2.6081417,
+  ))
+
+jr.shape<-jr.shape %>% mutate(
+  RiskScore=case_when(
+    Genotype=="36"~1,
+    Genotype=="1"~0.9524501,
+    Genotype=="50"~1.2405797,
+    Genotype=="3"~1.1978105,
+    Genotype=="44"~1.0984207,
+    Genotype=="7"~1.5670542,
+    Genotype=="31"~1.6818513,
+    Genotype=="13"~2.3255781,
+    Genotype=="62"~2.5519734,
+    Genotype=="41"~2.6081417,
+  ))
+
 #pulling global growth rate for each genotype
 globeGR<-grow4 %>% group_by(Genotype,trait,time) %>% summarize(meanGR=mean(growth_rate),sd=sd(growth_rate))
 
-#reorder the two dfs to match
-globeGR<- globeGR %>% arrange(factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")),
-                              factor(trait,levels=c("TLE","SA","V","Vinter")),
-                              factor(time, levels = c("0.3", "3.6", "6.9","9.12")))
+#Using TLE as "growth" metric since this is by far the most common way we measure coral growth for branching corals
+tleGR<-filter(globeGR,trait=="TLE")
+tleGR1<-rbind(tleGR,tleGR[rep(1:nrow(tleGR),3),]) #need to replicate this three more times to match length of jr.pls (4 total traits)
+tleGR2<-rbind(tleGR,tleGR[rep(1:nrow(tleGR),4),]) #need to replicate this four more times to match length of jr.shape (5 total traits)
+
+#reorder the dfs to match eachother so you can just cbind them together
+# globeGR<- globeGR %>% arrange(factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")),
+#                               factor(trait,levels=c("TLE","SA","V","Vinter")),
+#                               factor(time, levels = c("0.3", "3.6", "6.9","9.12")))
 jr.pls<- jr.pls %>% arrange(factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")),
-                            factor(Trait,levels=c("TLE","SA","V","Vinter")),
-                            factor(Time, levels = c("T3", "T6", "T9","T12")))
+                            factor(Time, levels = c("T3", "T6", "T9","T12")),
+                            factor(Trait,levels=c("TLE","SA","V","Vinter")))
+tleGR1<-tleGR1 %>% arrange(factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")),
+                           factor(trait,levels=c("TLE","SA","V","Vinter")),
+                           factor(time, levels = c("0.3", "3.6", "6.9","9.12")))
 
+jr.shape<- jr.shape %>% arrange(factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")),
+                                factor(Trait,levels=c("TLE","SA","V","Vinter")),
+                                factor(Time, levels = c("T3", "T6", "T9","T12")))
+tleGR2<-tleGR2 %>% arrange(factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")),
+                         factor(trait,levels=c("TLE","SA","V","Vinter")),
+                         factor(time, levels = c("0.3", "3.6", "6.9","9.12")))
 #double check to make sure the two df have identical rows
-paste(jr.pls$Genotype,jr.pls$Trait,jr.pls$Time)==paste(globeGR$Genotype,globeGR$trait,globeGR$time)
 
-jr.pls<-cbind(jr.pls,globeGR[,4:5]) #add growth rate to JR dataframe
 
+jr.pls$TLE_GR<-tleGR1$meanGR #add growth rate to JR dataframe
+jr.shape$TLE_GR<-tleGR2$meanGR #add TLE gowthrate to the JR shape DF
+
+#verifying normality
+ggdensity(filter(jr.pls,Trait=="TLE",Time=="T12")$Plasticity)
+
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T3")$RiskScore) #p=06652, set of risk scores is the same across time points
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T12")$Plasticity) #good for all but T12
+shapiro.test(filter(jr.pls,Trait=="Vinter",Time=="T12")$Plasticity) #non normal for most time points
+shapiro.test(filter(jr.pls,Trait=="V",Time=="T12")$Plasticity) #good for all time points
+shapiro.test(filter(jr.pls,Trait=="SA",Time=="T12")$Plasticity) #good for all time points
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T12")$RiskScore) #p=06652, set of risk scores is the same across time points
+
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T12")$meanGR) #good for all 
+shapiro.test(filter(jr.pls,Trait=="Vinter",Time=="T12")$meanGR) #good for all
+shapiro.test(filter(jr.pls,Trait=="V",Time=="T12")$meanGR) #good for all time points
+shapiro.test(filter(jr.pls,Trait=="SA",Time=="T12")$meanGR) #good for all time points but T3
+
+ggdensity(filter(jr.pls,Trait=="TLE",Time=="T12")$Plasticity)
+
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T3")$RiskScore) #p=06652, set of risk scores is the same across time points
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T12")$Plasticity) #good for all but T12
+shapiro.test(filter(jr.pls,Trait=="Vinter",Time=="T12")$Plasticity) #non normal for most time points
+shapiro.test(filter(jr.pls,Trait=="V",Time=="T12")$Plasticity) #good for all time points
+shapiro.test(filter(jr.pls,Trait=="SA",Time=="T12")$Plasticity) #good for all time points
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T12")$RiskScore) #p=06652, set of risk scores is the same across time points
+
+shapiro.test(filter(jr.pls,Trait=="TLE",Time=="T12")$meanGR) #good for all 
+shapiro.test(filter(jr.pls,Trait=="Vinter",Time=="T12")$meanGR) #good for all
+shapiro.test(filter(jr.pls,Trait=="V",Time=="T12")$meanGR) #good for all time points
+shapiro.test(filter(jr.pls,Trait=="SA",Time=="T12")$meanGR) #good for all time points but T3
+
+shapiro.test(filter(jr.shape,Trait=="Convexity",Time=="T3")$RiskScore) #p=06652, set of risk scores is the same across time points
+shapiro.test(filter(jr.shape,Trait=="Convexity",Time=="T12")$Plasticity) #good for all 
+shapiro.test(filter(jr.shape,Trait=="Sphericity",Time=="T12")$Plasticity) #good for all
+shapiro.test(filter(jr.shape,Trait=="Packing",Time=="T6")$Plasticity) #good for all time points but T6
+shapiro.test(filter(jr.shape,Trait=="SAtoV",Time=="T12")$Plasticity) #good for all time points but T6
+shapiro.test(filter(jr.shape,Trait=="SAtoTLE",Time=="T12")$Plasticity) #good for all time points but T9, T12
+
+shapiro.test(filter(jr.shape,Trait=="Convexity",Time=="T12")$meanGR) #good for all, TLE used as growth in all correlation
 
 #Visualizing in 2D space the relationship between plasticity and risk score / p vs GR / GR vs RS
-
-plots<-foreach (x = unique(jr.pls$Trait)) %do% {
+plots1<-foreach (x = unique(jr.pls$Trait)) %do% {
   foreach (p=unique(jr.pls$Time)) %do% {
-    ggscatter(data=filter(jr.pls,Trait==x,Time==p),x="Plasticity",y="meanGR",
+    ggscatter(data=filter(jr.pls,Trait==x,Time==p),x="TLE_GR",y="RiskScore",
               add="reg.line", conf.int=TRUE,
               cor.coef=TRUE, cor.method="pearson",
-              xlab=paste("Plasticity in",x ,"at",p), ylab="Mean GR")
+              xlab=paste("Mean Growth Rate \n\ in TLE (cm) at",p), ylab="Risk Score")
   }
 }
 
-#pulling out just a single time point (for figure 4 in manuscript)
-plots<-foreach (p=unique(jr.pls$Trait)) %do% {
-    ggscatter(data=filter(jr.pls,Trait==p,Time=="T12"),x="Plasticity",y="meanGR",
+#have to pull out plots from for loop plot list before putting in ggarrange
+flist<-c(plots1[[1]],plots1[[2]],plots1[[3]],plots1[[4]])
+quartz()
+ggarrange(plotlist =plots1[[1]],common.legend = T,nrow=2, ncol=2)
+
+
+##Correlations with shape traits
+plots2<-foreach (g = unique(jr.shape$Trait)) %do% {
+  foreach (p=unique(jr.shape$Time)) %do% {
+    ggscatter(data=filter(jr.shape,Trait==g,Time==p),x="Plasticity",y="RiskScore",
               add="reg.line", conf.int=TRUE,
-              cor.coef=TRUE, cor.method="pearson", color = "RiskScore",
-              xlab=paste("Plasticity in",p), ylab="Mean Growth Rate")+
-    gradient_color(c( "#0000CC", "#E1EDF3","#FAE7DC","#67001F"))+theme(legend.position = "none")
+              cor.coef=TRUE, cor.method="pearson",
+              xlab=paste("Plasticity in",g ,"at",p), ylab="Risk Score")
+  }
 }
 
 #have to pull out plots from for loop plot list before putting in ggarrange
-flist<-c(plots[[1]],plots[[2]],plots[[3]],plots[[4]])
+flist<-c(plots2[[1]],plots2[[2]],plots2[[3]],plots2[[4]],plots2[[5]])
 quartz()
-ggarrange(plotlist =plots,common.legend = T) 
+ggarrange(plotlist =flist,common.legend = T,nrow=5, ncol=4)
 
+#pulling out just a single time point (for figure 4 in manuscript)
+jr.pls<-jr.pls  %>% group_by(Genotype) %>% mutate(Overall_TLE=mean(TLE_GR))
+plots<-foreach (p=unique(jr.pls$Trait)) %do% {
+    ggscatter(data=filter(jr.pls,Trait==p,Time=="T12"),x="Plasticity",y="Overall_TLE",
+              add="reg.line", conf.int=TRUE,
+              cor.coef=TRUE, cor.method="pearson", color = "RiskScore",
+              xlab=paste("Plasticity in",p), ylab="Overall Growth Rate (TLE)")+
+    gradient_color(c( "#0000CC", "#E1EDF3","#FAE7DC","#67001F"))+theme(legend.position = "none")
+}
+
+quartz()
+ggarrange(plotlist =plots,common.legend = T,nrow=2, ncol=2) 
+
+###Overall growth rate vs plasticity 
+#don't think T12-T0/12 months is a good way to do it because it doesn't account for breakage even if using the breakage-free data set
+#this is because time point specific GR restarts after negative growth but there is no way to do this when you do T12 - T0 size
+#instead maybe we can average across time point specific growth rates
+
+#avg growth rate with T12 plasticity
+OA.df<-globeGR %>% group_by(Genotype, trait) %>%
+  summarise(Overall_GR=mean(meanGR))
+OA.df<-OA.df %>% arrange(factor(Genotype,levels=c("36","1","50","3","44","7","31","13","62","41")),
+                         factor(trait,levels=c("TLE","SA","V","Vinter")))
+OA.df$Plasticity<-filter(jr.pls,Time=="T12")$Plasticity
+OA.df$RiskScore<-filter(jr.pls,Time=="T12")$RiskScore
+
+#avg growth rate with average plasticity
+OA.df<-jr.pls %>% group_by(Genotype,Trait) %>%
+  summarise(Overall_Plas=mean(Plasticity),
+            Overall_GR=mean(meanGR_TLE),
+            RiskScore=mean(RiskScore),)
+
+
+plots3<-foreach (x = unique(OA.df$Trait)) %do% {
+    ggscatter(data=filter(OA.df,Trait==x),x="Overall_Plas",y="Overall_GR",
+              add="reg.line", conf.int=TRUE,
+              cor.coef=TRUE, cor.method="pearson",alpha=1,
+              xlab=paste("Overall Plasticity in",x ), ylab="Overall growth rate (TLE)")
+    #gradient_color(c( "#0000CC", "#E1EDF3","#FAE7DC","#67001F"))+theme(legend.position = "none")
+}
+
+quartz()
+ggarrange(plotlist =plots3,common.legend = T,nrow=2, ncol=2) 
+
+OS.df<-jr.shape %>% group_by(Genotype,Trait) %>%
+  summarise(Overall_Plas=mean(Plasticity),
+            Overall_GR=mean(meanGR),
+            RiskScore=mean(RiskScore))
+
+plots4<-foreach (x = unique(OS.df$Trait)) %do% {
+  ggscatter(data=filter(OS.df,Trait==x),x="Overall_Plas",y="RiskScore",
+            add="reg.line", conf.int=TRUE,
+            cor.coef=TRUE, cor.method="pearson",alpha=1,
+            xlab=paste("Plasticity","in",x), ylab="Risk Score")
+    #gradient_color(c( "#0000CC", "#E1EDF3","#FAE7DC","#67001F"))+theme(legend.position = "none")
+}
+
+quartz()
+flist4<-c(plots4[1],plots4[2],plots4[3],plots4[4])
+ggarrange(plotlist =plots4,common.legend = T,nrow=3, ncol=2) 
 
 #write.csv(jr.pls,"/Volumes/GoogleDrive/My Drive/SCHOOL/LAB/CRRPTransplant/JointRegressionResults.csv")
 
