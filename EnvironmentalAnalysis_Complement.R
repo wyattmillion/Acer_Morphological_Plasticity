@@ -114,7 +114,7 @@ temp<-temp %>% mutate(Site = factor(Site, levels=c("E. Sambo","Marker 32","W. Sa
 temp <- temp %>% filter(Date>=as.Date("2018-05-1") & Date <= as.Date("2019-04-30")) #isolating data to only experimental series
 #write.csv(temp,"EnvironmentalData/OutplantTempData.csv",row.names = FALSE)
 
-####BEGIN HERE IS USING GITHUB DATA###
+####BEGIN HERE IF USING GITHUB DATA###
 temp<-read.csv("EnvironmentalData/OutplantTempData.csv",header = T) #change path (stuff within "") to the appropriate location
 temp<-temp %>% mutate(Site = factor(Site, levels=c("E. Sambo","Marker 32","W. Sambo","Big Pine","Dave's Ledge","Looe Key","EDR","Maryland Shoals","Bahia Honda")))
 
@@ -225,7 +225,7 @@ coords<-cbind(coords,TotalHots[,2:5])
 
 #Using an "area under the curve" approach. It is hard to decide a relevant time scale to look at thermal predictability,
 #So instead, plot autocorrelation across numerous scales (lags). 
-#Autocor tends declines as the lag gets bigger (harder to predict increasely more future temps from current temps)
+#Autocor tends to declines as the lag gets bigger (harder to predict increasingly more future temps from current temps)
 #Sites that are less predictable will have sharper declines in autocor as lag increases 
 #Quantifying this predictablilty as the sum of autocor before autocor drops below 0 (i.e. no information about future temps from current temps)
 #acf() function calculates autocor over any lag you want so use this to make a curve and find the area under it that is positive autocor
@@ -288,21 +288,21 @@ sercC<-filter(serc,DATE>=as.Date("2018-3-1")& DATE<=as.Date("2019-6-1")) #contem
 #individual ANOVAs for each water quality  parameter in both historical and contemporary sets
 #change dataset as needed           Cont  Hist
 summary(aov(lm(NOX.B~SITE,sercH))) #.813 #0.0193 *
-summary(aov(lm(NO2.B~SITE,sercC))) #.723 #0.147
-summary(aov(lm(NO3_B~SITE,serc))) #.741 #0.0145*
-summary(aov(lm(NH4.B~SITE,serc))) # .579 #0.414
-summary(aov(lm(TN.B~SITE,serc))) #0.37 #0.597
-summary(aov(lm(DIN.B~SITE,serc))) # 0.444 #0.346
-summary(aov(lm(TON.B~SITE,serc))) # 0.379 #0.63
-summary(aov(lm(TP.B~SITE,serc))) #0.991 #0.99
-summary(aov(lm(SRP.B~SITE,serc))) #.267 #0.798
-summary(aov(lm(TURB.B~SITE,serc))) # 0.0824 #0.697
-summary(aov(lm(TOC.B~SITE,serc))) # 0.54 #0.488
-summary(aov(lm(SiO2.B~SITE,serc))) #.856 #0.0405 *
-summary(aov(lm(SAL.B~SITE,serc))) #.993 #0.955
-summary(aov(lm(DO.B~SITE,serc))) #.77 #0.997
-summary(aov(lm(Kd~SITE,serc))) #.101 #0.661
-summary(aov(lm(X.SAT_B~SITE,serc))) #.768 #0.997
+summary(aov(lm(NO2.B~SITE,sercH))) #.723 #0.147
+summary(aov(lm(NO3_B~SITE,sercH))) #.741 #0.0145*
+summary(aov(lm(NH4.B~SITE,sercH))) # .579 #0.414
+summary(aov(lm(TN.B~SITE,sercH))) #0.37 #0.597
+summary(aov(lm(DIN.B~SITE,sercH))) # 0.444 #0.346
+summary(aov(lm(TON.B~SITE,sercH))) # 0.379 #0.63
+summary(aov(lm(TP.B~SITE,sercH))) #0.991 #0.99
+summary(aov(lm(SRP.B~SITE,sercH))) #.267 #0.798
+summary(aov(lm(TURB.B~SITE,sercH))) # 0.0824 #0.697
+summary(aov(lm(TOC.B~SITE,sercH))) # 0.54 #0.488
+summary(aov(lm(SiO2.B~SITE,sercH))) #.856 #0.0405 *
+summary(aov(lm(SAL.B~SITE,sercH))) #.993 #0.955
+summary(aov(lm(DO.B~SITE,sercH))) #.77 #0.997
+summary(aov(lm(Kd~SITE,sercH))) #.101 #0.661
+summary(aov(lm(X.SAT_B~SITE,sercH))) #.768 #0.997
 summary(aov(lm(Temp~Site,temp))) #2e-16
 
 model<-aov(Temp~Site,temp) 
@@ -663,7 +663,7 @@ grow$CulumativeBreaks<-ifelse(grow$T3_Status=="M",NA,grow$CulumativeBreaks) #if 
   envBay$Predictability<-as.numeric(envBay$Predictability)
   #write.csv(envBay,"Bayesian_Environmental_Dataframe.csv",row.names = F)
   
-  #envBay<-read.csv("Bayesian_Environmental_Dataframe.csv",header = T)
+  envBay<-read.csv("/Volumes/GoogleDrive-109655319948019787656/My Drive/SCHOOL/LAB/CRRPTransplant/Bayesian_Environmental_Dataframe.csv",header = T)
   str(envBay)
 
 #Step 6: Remove highly correlated variables
@@ -718,7 +718,7 @@ require(lattice)
 library(AER)
 #JAGS model for Acer morpholog
 # Zuur's code for graphs
-source("/Volumes/Google Drive/My Drive/SCHOOL/LAB/RCNtraining/MCMCSupportHighstatV4.R")
+source("/Volumes/GoogleDrive-109655319948019787656//My Drive/SCHOOL/LAB/RCNtraining/MCMCSupportHighstatV4.R")
 # Prepare model data for JAGS
 colnames(envBay2[2:12])
 
@@ -731,9 +731,9 @@ Site <- as.numeric(as.factor(envBay2$SITE))  #just give it this order because Lo
 Nre<- length(unique(Site))  
 ### End of New part
 
-envBay2$Vinter<-as.factor(envBay2$Vinter) #response variable (change as needed)
+envBay2$RiskScore<-as.factor(envBay2$RiskScore) #response variable (change as needed)
 #JAGS.data <- list(Y = disease_data$WPL_P_A,
-JAGS.data <- list(Y = envBay2$Vinter, 
+JAGS.data <- list(Y = envBay2$RiskScore, 
                   X = X,
                   K = K,    # New part
                   Site=Site, #Random effects identification 
@@ -815,8 +815,12 @@ G1 <- jags(data       = JAGS.data,
            n.iter     = 5000)
 G2   <- update(G1, n.iter = 100000, n.thin = 10)
 #G3   <- update(G2, n.iter = 100000, n.thin = 10)
-outG <- G2$BUGSoutput
-
+outGrisk<-G2$BUGSoutput
+#outGv<-G2$BUGSoutput
+#outGsa<-G2$BUGSoutput
+#outGtle
+#outGvi 
+save(outGtle,outGsa,outGv,outGvi,outGrisk, file = "BayesOutputs.RData")
 #Save the model results as you make them so you don't have to keep rerunning the model
 #outTLE<-outG
 #outSA<-outG
@@ -830,7 +834,7 @@ outG <- outRS
 vars<- c("beta[1]", "beta[2]", "beta[3]", "beta[4]", "beta[5]", "beta[6]","beta[7]","beta[8]","beta[9]","beta[10]",
          "beta[11]","beta[12]")
 
-OUT1 <- MyBUGSOutput(G2$BUGSoutput, vars) 
+OUT1 <- MyBUGSOutput(outGrisk, vars) 
 print(OUT1, digits =3)
 summary(G2)
 
@@ -851,6 +855,7 @@ G2_df=data.frame(variableG2=MyNames,MeanG2=OUT1[,1],Down=OUT1[,3],Up=OUT1[,4])
 G2_df$color <- ("#E1EDF3")
 G2_df$color[(G2_df$MeanG2 > 0) & (G2_df$Down>0)] <- '#DC6F58'
 G2_df$color[(G2_df$MeanG2 < 0) & (G2_df$Up<0)] <- '#549EC9'
+G2_df$color[(G2_df$variableG2=="(Intercept)")]<-'#E1EDF3' #just uncoloring the intercept point since it does not make sense to color like other variables
 #tiff(file=file.path(home,'output','Figure_2.tif'),height=2000,width=2700,res=300)
 
 quartz()
@@ -863,12 +868,7 @@ ggplot(G2_df,aes(x=reorder(variableG2, MeanG2), MeanG2)) +
   geom_hline(yintercept=0, linetype="dashed", color="gray") +
   labs(y=expression(paste("Estimated ",gamma," coefficients")), x="")+theme_classic()
 
-#more simple plot
-G2_df=data.frame(variableG2=MyNames,MeanG2=OUT1[,1],Down=OUT1[,3],Up=OUT1[,4])
-G2_df$color <- ("white")
-G2_df$color[(G2_df$MeanG2 > 0) & (G2_df$Down>0)] <- 'red'
-G2_df$color[(G2_df$MeanG2 < 0) & (G2_df$Up<0)] <- 'blue'
-
+#simpler plot
 ggplot(G2_df,aes(x=reorder(variableG2, MeanG2), MeanG2)) +
   geom_errorbar(aes(ymax=G2_df$Up, ymin=G2_df$Down), width=0) +
   geom_point(pch=21, size=3, fill=G2_df$color, color="black") +
